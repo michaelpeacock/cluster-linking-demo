@@ -1,0 +1,193 @@
+---
+version: '2'
+services:
+  zookeeper-secondary:
+    image: confluentinc/cp-zookeeper:7.0.1
+    hostname: zookeeper-secondary
+    container_name: zookeeper-secondary
+    ports:
+      - "2182:2182"
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2182
+      ZOOKEEPER_SERVERS: zookeeper-secondary:2889:3889
+    logging:
+        driver: "json-file"
+        options:
+            max-file: "5"
+            max-size: "10m"
+    volumes:
+      - ./zoo/data:/var/lib/zookeeper/data
+      - ./zoo/log:/var/lib/zookeeper/log
+
+  broker-secondary:
+    image: confluentinc/cp-server:7.0.1
+    hostname: broker-secondary
+    container_name: broker-secondary
+    ports:
+      - "9092:9092"
+      - "8092:8092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_BROKER_RACK: "secondary"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker-secondary:19092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper-secondary:2182"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker-secondary:19092
+      KAFKA_CONFLUENT_CLUSTER_LINK_ENABLE: "true"
+      KAFKA_JMX_PORT: 8092
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG4J_ROOT_LOGLEVEL: ERROR
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: ERROR
+      KAFKA_CONFLUENT_CLUSTER_LINK_ENABLE: "true"
+    depends_on:
+      - zookeeper-secondary
+    logging:
+        driver: "json-file"
+        options:
+            max-file: "5"
+            max-size: "10m"
+    volumes:
+      - ./broker/data:/var/lib/kafka/data
+
+  schema-registry-secondary:
+    image: confluentinc/cp-schema-registry:7.0.1
+    hostname: schema-registry-secondary
+    container_name: schema-registry-secondary
+    depends_on:
+      - broker-secondary
+    ports:
+      - "8082:8082"
+    restart: always
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry-secondary
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker-secondary:19092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8082
+      SCHEMA_REGISTRY_WRAPPER_FOR_NULLABLES: 'true'
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "5"
+          max-size: "10m"
+
+  control-center-secondary:
+    image: confluentinc/cp-enterprise-control-center:7.0.1
+    hostname: control-center-secondary
+    container_name: control-center-secondary
+    depends_on:
+      - broker-secondary
+      - schema-registry-secondary
+      - ksqldb-server-secondary
+    ports:
+      - "9022:9021"
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker-secondary:19092'
+      CONTROL_CENTER_KAFKA_SECONDARY_BOOTSTRAP_SERVERS: 'broker-secondary:19092'
+      CONTROL_CENTER_CONNECT_CONNECT-DEFAULT_CLUSTER: 'connect-secondary:8083'
+      CONTROL_CENTER_KSQL_KSQLDB1_URL: "http://ksqldb-server-secondary:8089"
+      CONTROL_CENTER_KSQL_KSQLDB1_ADVERTISED_URL: "http://localhost:8089"
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry-secondary:8082"
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      PORT: 9021
+    logging:
+        driver: "json-file"
+        options:
+            max-file: "5"
+            max-size: "10m"
+
+  ksqldb-server-secondary:
+    image: confluentinc/cp-ksqldb-server:7.0.1
+    hostname: ksqldb-server-secondary
+    container_name: ksqldb-server-secondary
+    depends_on:
+      - broker-secondary
+    ports:
+      - "8089:8089"
+    restart: always
+    environment:
+      KSQL_CONFIG_DIR: "/etc/ksql"
+      KSQL_KSQL_EXTENSION_DIR: "/etc/ksql-extension"
+      KSQL_BOOTSTRAP_SERVERS: "broker-secondary:19092"
+      KSQL_HOST_NAME: ksqldb-server-secondary
+      KSQL_LISTENERS: "http://0.0.0.0:8089"
+      KSQL_CACHE_MAX_BYTES_BUFFERING: 0
+      KSQL_KSQL_SCHEMA_REGISTRY_URL: "http://schema-registry-secondary:8082"
+      KSQL_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+      KSQL_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+      KSQL_KSQL_CONNECT_URL: "http://connect-secondary:8083"
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
+      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+      KSQL_ACCESS_CONTROL_ALLOW_ORIGIN: '*'
+      KSQL_ACCESS_CONTROL_ALLOW_METHODS: 'GET,POST,HEAD'
+      KSQL_ACCESS_CONTROL_ALLOW_HEADERS: 'X-Requested-With,Content-Type,Accept,Origin,Authorization'
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "5"
+          max-size: "10m"
+
+  connect-secondary:
+    image: confluentinc/cp-kafka-connect-base:7.0.1
+    container_name: connect-secondary
+    ports:
+      - "8084:8083"
+    restart: always
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "broker-secondary:19092"
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: compose-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: _kafka-connect-group-01-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _kafka-connect-group-01-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _kafka-connect-group-01-status
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: 'http://schema-registry-secondary:8082'
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "connect-secondary"
+      CONNECT_LOG4J_ROOT_LOGLEVEL: "INFO"
+      CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
+      CONNECT_LOG4J_APPENDER_STDOUT_LAYOUT_CONVERSIONPATTERN: "[%d] %p %X{connector.context}%m (%c:%L)%n"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_PLUGIN_PATH: '/usr/share/java,/connectors,/usr/share/confluent-hub-components/'
+    depends_on:
+      - broker-secondary
+      - schema-registry-secondary
+    command:
+      - bash
+      - -c
+      - |
+        echo "Installing Connector"
+        confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.0.2
+        confluent-hub install --no-prompt confluentinc/kafka-connect-elasticsearch:11.0.1
+        confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.5.3
+        #
+        echo "Launching Kafka Connect worker"
+        /etc/confluent/docker/run
+
+  sqlserver-secondary:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    hostname: sqlserver-secondary
+    container_name: sqlserver-prisecondarymary
+    ports:
+      - "1434:1434"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_AGENT_ENABLED: "true"
+      MSSQL_PID: "Standard"
+      SA_PASSWORD: "Password!"
+
+networks: 
+  default: 
+    external: 
+      name: demo-network 
