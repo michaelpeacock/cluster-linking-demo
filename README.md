@@ -10,7 +10,7 @@ More information on Cluster Linking and another demo can be found [here](https:/
 
 <br>
 
-###Table of Contents
+### Table of Contents
 * [Setup](#setup)
 * [Running](#running)
 * [Produce Employee Data](#produce-employee-data)
