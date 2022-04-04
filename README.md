@@ -24,9 +24,9 @@ The following dependencies are needed:
 
 * docker and docker-compose
 * java runtime envrionment
-* Confluent Platform -- curl -O http://packages.confluent.io/archive/7.0/confluent-7.0.1.tar.gz
+* Confluent Platform* -- curl -O http://packages.confluent.io/archive/7.0/confluent-7.0.1.tar.gz
 
-Confluent Platform is installed in order to use the command line tools.
+*Confluent Platform is installed in order to use the command line tools. Alternatively, you can connect to the broker container to run the CLI tools also.
 
 There are two docker-compose files available in the PRIMARY and SECONDARY folders. They can be run on the same node since the ports have been modified to avoid collisions. Running on two separate nodes is also possible but will require changes to the advertised listeners and other references to `localhost` in the docker-compose files and command line tools.
 
@@ -34,10 +34,10 @@ You may also need to update the permissions on the mapped volumes for Kafka and 
 
 ```
 cd PRIMARY
-chown -R 1000:1000 broker zookeeper
+chown -R 1000:1000 broker zoo
 
 cd SECONDARY
-chown -R 1000:1000 broker zookeeper
+chown -R 1000:1000 broker zoo
 ```
 
 ### Create a docker network
@@ -72,7 +72,7 @@ Display the Secondary Confluent Control Center `localhost:9022` or `<your ip>:90
 <br>
 
 # Produce Employee Data
->kafka-producer-perf-test --topic employees-pri --payload-file MOCK_DATA.json --num-records 100000 --throughput 5 --producer-props bootstrap.servers=localhost:9091
+>kafka-producer-perf-test --topic employees-pri --payload-file mock_employee_data.json --num-records 100000 --throughput 5 --producer-props bootstrap.servers=localhost:9091
 
 View the data in the Primary Confluent Control Center:
 ![](images/employee_data.png)
